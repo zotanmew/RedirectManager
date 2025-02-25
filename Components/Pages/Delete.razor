@@ -1,0 +1,48 @@
+@page "/admin/delete/{id:guid}"
+@using Microsoft.AspNetCore.Components.Sections
+@using Microsoft.EntityFrameworkCore
+@using RedirectManager.Database
+@using RedirectManager.Database.Tables
+<PageTitle>Delete redirect</PageTitle>
+<SectionContent SectionName="Title">Delete redirect</SectionContent>
+
+<EditForm Model="Model" OnSubmit="SubmitAsync" FormName="DeleteRedirect">
+    <div class="mb-3">
+        <p>Are you sure you want to delete this redirect?</p>
+        @if (_redirect != null)
+        {
+            <p><b>Shortcode:</b> @_redirect.Shortcode</p>
+            <p><b>Target URL:</b> @_redirect.TargetUrl</p>
+        }
+    </div>
+    <a role="button" class="btn btn-secondary btn-sm" href="/admin">Cancel</a>
+    <button type="submit" class="btn btn-danger btn-sm">Confirm</button>
+</EditForm>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    
+    [SupplyParameterFromForm(FormName = "DeleteRedirect")]
+    private EditModel Model { get; set; } = null!;
+
+    [Inject] public DatabaseContext   Database   { get; set; } = null!;
+    [Inject] public NavigationManager Navigation { get; set; } = null!;
+
+    private Redirect? _redirect;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Model == null!) Model = new EditModel();
+        _redirect = await Database.Redirects.FirstOrDefaultAsync(p => p.Id == Id);
+        if (_redirect == null) Navigation.NavigateTo("/admin");
+    }
+
+    private async Task SubmitAsync()
+    {
+        await Database.Redirects.Where(p => p.Id == Id).ExecuteDeleteAsync();
+
+        Navigation.NavigateTo("/admin");
+    }
+
+    private class EditModel;
+}

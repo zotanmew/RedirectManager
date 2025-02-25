@@ -1,0 +1,49 @@
+@page "/admin/login"
+@using Microsoft.AspNetCore.Components.Sections
+<PageTitle>Log in</PageTitle>
+<SectionContent SectionName="Title">Log in</SectionContent>
+
+<EditForm Model="Model" FormName="Auth" OnValidSubmit="Authenticate">
+    <div class="mb-3">
+        <label for="Model.Token" class="form-label">Token</label>
+        <InputText @bind-Value="Model.Token" id="Model.Token" name="Model.Token" placeholder="Token" class="form-control" type="text" required minlength="1"/>
+    </div>
+    <button type="submit" class="btn btn-primary">Submit</button>
+</EditForm>
+
+@code {
+    [SupplyParameterFromForm(FormName = "Auth")]
+    private EditModel Model { get; set; } = null!;
+    
+    [CascadingParameter]
+    public HttpContext? HttpContext { get; set; }
+
+    [Inject] public NavigationManager Navigation { get; set; } = null!;
+
+    protected override void OnInitialized()
+    {
+        if (Model == null!)
+            Model = new EditModel();
+
+        if (HttpContext?.Request.Cookies.TryGetValue("token", out var token) == true && token == Constants.AuthToken)
+            Navigation.NavigateTo("/admin");
+    }
+
+    private void Authenticate()
+    {
+        if (Model.Token == Constants.AuthToken)
+        {
+            HttpContext?.Response.Cookies.Append("token", Model.Token);
+            Navigation.NavigateTo("/admin");
+        }
+        else
+        {
+            Navigation.Refresh(true);
+        }
+    }
+
+    private class EditModel
+    {
+        public string Token { get; set; } = "";
+    }
+}

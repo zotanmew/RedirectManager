@@ -1,0 +1,120 @@
+@page "/admin/edit/{id:guid}"
+@using System.Buffers
+@using System.Text.Encodings.Web
+@using Microsoft.AspNetCore.Components.Sections
+@using Microsoft.AspNetCore.WebUtilities
+@using Microsoft.EntityFrameworkCore
+@using RedirectManager.Database
+@using RedirectManager.Database.Tables
+<PageTitle>Edit redirect</PageTitle>
+<SectionContent SectionName="Title">Edit redirect</SectionContent>
+@if (_redirect == null)
+{
+    return;
+}
+
+@if (_error != null)
+{
+    <div class="alert alert-danger" role="alert">
+        @_error
+    </div>
+}
+
+<EditForm Model="Model" OnValidSubmit="SubmitAsync" FormName="EditRedirect">
+    <div class="mb-3">
+        <label for="Model.Shortcode" class="form-label">Shortcode</label>
+        <InputText
+            @bind-Value="Model.Shortcode" id="Model.Shortcode" name="Model.Shortcode" placeholder="Shortcode"
+            class="form-control" type="text" required minlength="1" pattern="[a-z0-9]+"
+        />
+    </div>
+    <div class="mb-3">
+        <label for="Model.TargetUrl" class="form-label">Target URL</label>
+        <InputText
+            @bind-Value="Model.TargetUrl" id="Model.TargetUrl" name="Model.TargetUrl" placeholder="Target URL"
+            class="form-control" type="url" required
+        />
+    </div>
+    <button type="submit" class="btn btn-primary">Submit</button>
+</EditForm>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    [SupplyParameterFromForm(FormName = "EditRedirect")]
+    private EditModel Model { get; set; } = null!;
+
+    [Inject] public DatabaseContext   Database   { get; set; } = null!;
+    [Inject] public NavigationManager Navigation { get; set; } = null!;
+
+    private string? _error;
+
+    private const string Charset = "0123456789abcdefghijklmnopqrstuvwxyz";
+
+    private static readonly SearchValues<char> AllowedChars = SearchValues.Create(Charset);
+
+    private Redirect? _redirect;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        if (QueryHelpers.ParseQuery(uri.Query).TryGetValue("error", out var error))
+            _error = error.ToString();
+
+        _redirect = await Database.Redirects.FirstOrDefaultAsync(p => p.Id == Id);
+        if (_redirect == null) Navigation.NavigateTo("/admin");
+        else
+        {
+            if (Model == null!)
+                Model = new EditModel { Shortcode = _redirect.Shortcode, TargetUrl = _redirect.TargetUrl };
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_redirect == null) return;
+
+        Model.Shortcode = Model.Shortcode.Trim().ToLowerInvariant();
+        Model.TargetUrl = Model.TargetUrl.Trim();
+
+        if (Model.Shortcode.Length < 1 || Model.Shortcode.AsSpan().ContainsAnyExcept(AllowedChars))
+        {
+            var error = UrlEncoder.Default.Encode("Invalid shortcode. Valid characters are a-z and 0-9.");
+            Navigation.NavigateTo($"/admin/edit/{Id}?error={error}");
+            return;
+        }
+
+        if (Constants.SystemUrls.Contains(Model.Shortcode))
+        {
+            var error = UrlEncoder.Default.Encode("The selected shortcode is reserved for system use. Please pick a different one.");
+            Navigation.NavigateTo($"/admin/edit/{Id}?error={error}");
+            return;
+        }
+
+        if (!Uri.TryCreate(Model.TargetUrl, UriKind.Absolute, out var uri) || uri.Scheme is not "http" and not "https")
+        {
+            var error = UrlEncoder.Default.Encode("Invalid URL. Make sure the URL is an absolute http or https URL.");
+            Navigation.NavigateTo($"/admin/edit/{Id}?error={error}");
+            return;
+        }
+
+        if (_redirect.Shortcode != Model.Shortcode && await Database.Redirects.AnyAsync(p => p.Shortcode == Model.Shortcode))
+        {
+            var error = UrlEncoder.Default.Encode("The specified shortcode already exists in the database.");
+            Navigation.NavigateTo($"/admin/edit/{Id}?error={error}");
+            return;
+        }
+
+        _redirect.Shortcode = Model.Shortcode;
+        _redirect.TargetUrl = uri.ToString();
+
+        await Database.SaveChangesAsync();
+        Navigation.NavigateTo("/admin");
+    }
+
+    private class EditModel
+    {
+        public string Shortcode { get; set; } = "";
+        public string TargetUrl { get; set; } = "";
+    }
+}

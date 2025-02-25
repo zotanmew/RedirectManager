@@ -1,0 +1,112 @@
+﻿@page "/admin/{page:int?}"
+@using Microsoft.EntityFrameworkCore
+@using RedirectManager.Database
+@using RedirectManager.Database.Tables
+@using Microsoft.AspNetCore.Components.Sections
+
+<PageTitle>All redirects</PageTitle>
+<SectionContent SectionName="Title">All redirects</SectionContent>
+
+<table class="table table-striped table-hover">
+    <thead>
+    <th>Shortcode</th>
+    <th>Target URL</th>
+    <th>Date added</th>
+    <th>Actions</th>
+    </thead>
+    <tbody>
+    @foreach (var redirect in _redirects)
+    {
+        <tr class="align flex-row align-items-center align-middle">
+            <td>@redirect.Shortcode</td>
+            <td>@redirect.TargetUrl</td>
+            <td>@redirect.DateAdded.ToString("MM/dd/yyyy")</td>
+            <td>
+                <div class="dropdown">
+                    <button
+                        class="btn btn-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                    >
+                        Actions
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li>
+                            <div class="dropdown-item" role="button" data-id="@redirect.Shortcode" onclick="copy(event)">
+                                Copy link
+                            </div>
+                        </li>
+                        <li><a class="dropdown-item" href="/admin/edit/@redirect.Id">Edit</a></li>
+                        <li><a class="dropdown-item" href="/admin/delete/@redirect.Id">Delete</a></li>
+                    </ul>
+                </div>
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+<nav>
+    <ul class="pagination">
+        @if (Page > 1)
+        {
+            <li class="page-item">
+                <a class="page-link" href="/admin/@(Page - 1)">Previous</a>
+            </li>
+        }
+        else
+        {
+            <li class="page-item disabled">
+                <div class="page-link">Previous</div>
+            </li>
+        }
+        @for (var i = 1; i <= _pageCount; i++)
+        {
+            if (Page == i)
+            {
+                <li class="page-item active">
+                    <div class="page-link">@i</div>
+                </li>
+            }
+            else
+            {
+                <li class="page-item">
+                    <a class="page-link" href="/admin/@i">@i</a>
+                </li>
+            }
+        }
+        @if (Page < _pageCount)
+        {
+            <li class="page-item">
+                <a class="page-link" href="/admin/@(Page + 1)">Next</a>
+            </li>
+        }
+        else
+        {
+            <li class="page-item disabled">
+                <div class="page-link">Next</div>
+            </li>
+        }
+    </ul>
+</nav>
+
+@code {
+    [Parameter] public int Page { get; set; } = 1;
+
+    [Inject] public DatabaseContext   Database   { get; set; } = null!;
+    [Inject] public NavigationManager Navigation { get; set; } = null!;
+
+    private List<Redirect> _redirects = null!;
+    private int            _pageCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        const int pageSize = 20;
+        if (Page < 1) Page = 1;
+        _pageCount = (int)Math.Ceiling(await Database.Redirects.CountAsync() / (double)pageSize);
+        _redirects = await Database.Redirects
+                                   .OrderByDescending(p => p.Id)
+                                   .Skip((Page - 1) * pageSize)
+                                   .Take(pageSize)
+                                   .ToListAsync();
+    }
+}
