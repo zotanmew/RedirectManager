@@ -1,0 +1,44 @@
+@page "/admin/import-export"
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components.Sections
+@using Microsoft.EntityFrameworkCore
+@using RedirectManager.Database
+@using RedirectManager.Database.Tables
+@inject DatabaseContext Database
+@inject NavigationManager Navigation
+<PageTitle>Import/Export</PageTitle>
+<SectionContent SectionName="Title">Import/Export</SectionContent>
+
+<h3>Import data</h3>
+<form method="post" enctype="multipart/form-data" @formname="ImportData" @onsubmit="ImportAsync" class="mb-4">
+    <div class="mb-3">
+        <input type="file" name="file" id="file" class="form-control"/>
+    </div>
+    <AntiforgeryToken/>
+    <button type="submit" class="btn btn-primary">Upload</button>
+</form>
+
+<h3>Export data</h3>
+<a href="/admin/export" role="button" class="btn btn-primary mb-2">Download</a>
+
+@code {
+    [SupplyParameterFromForm]
+    private IFormFile? File { get; set; } = null!;
+
+    private async Task ImportAsync()
+    {
+        if (File == null)
+        {
+            Navigation.Refresh(true);
+            return;
+        }
+
+        var deserialized = JsonSerializer.Deserialize<List<Redirect>>(File.OpenReadStream());
+        if (deserialized is null or []) return;
+        var ids = deserialized.Select(p => p.Id).ToArray();
+        await Database.Redirects.Where(p => ids.Contains(p.Id)).ExecuteDeleteAsync();
+        Database.AddRange(deserialized);
+        await Database.SaveChangesAsync();
+        Navigation.NavigateTo("/admin");
+    }
+}
