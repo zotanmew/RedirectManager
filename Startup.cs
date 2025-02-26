@@ -1,4 +1,5 @@
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using RedirectManager;
 using RedirectManager.Components;
@@ -50,6 +51,8 @@ await using (var scope = app.Services.CreateAsyncScope())
 	var db = scope.ServiceProvider.GetRequiredService<DatabaseContext>();
 	await db.Database.MigrateAsync();
 }
+
+app.UseForwardedHeaders(new ForwardedHeadersOptions { ForwardedHeaders = ForwardedHeaders.XForwardedProto });
 
 if (!app.Environment.IsDevelopment())
 	app.UseExceptionHandler("/error", createScopeForErrors: true);
